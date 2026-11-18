@@ -1,7 +1,7 @@
 {
-  "run_id": "20261118T160245-14b8e414",
+  "run_id": "20261118T164745-4ec59c25",
   "model_version": "b-company-gbdt-v4.1",
-  "built_at_utc": "2026-11-18T16:02:46.542957+00:00",
+  "built_at_utc": "2026-11-18T16:47:45.921031+00:00",
   "python_version": "3.11.16",
   "scikit_learn_version": "1.9.1",
   "pandas_version": "2.3.3",
@@ -21,6 +21,7 @@
     "acm_award",
     "work_years"
   ],
+  "model_sha256": "c1f5e4db7b0a49bed70c5f284413d57ac6b92347743d3c893d6d34d9ab111ee1",
   "threshold": 0.5,
   "random_seed": 42,
   "source_sha256": {

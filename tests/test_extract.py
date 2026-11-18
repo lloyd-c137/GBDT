@@ -20,6 +20,8 @@ def test_real_archives_have_expected_rows_and_labels():
     assert b.label_grade.value_counts().to_dict() == {"B": 8, "C": 8, "A": 4}
     assert len(p) == 260 and p.id.tolist() == list(range(1, 261))
     assert "label_grade" not in p.columns and "label_binary" not in p.columns
+    extended = ["candidate_name", "age_raw", "age_years", "employment_start_raw", "teamwork_summary", "career_direction", "project_background"]
+    assert not b[extended].isna().any().any() and not p[extended].isna().any().any()
 
 
 def test_zip_utf8_name_recovery_and_macos_metadata_exclusion(tmp_path):
@@ -58,6 +60,29 @@ def test_inline_fields_preserve_csharp_cpp_and_multiline_values():
     assert "下一代改造" in row["project_duties"]
     assert row["target_role"] == "后端开发工程师"
     assert row["school_name"] == "某大学，计算机专业"
+
+
+def test_personal_and_context_fields_are_preserved_without_model_feature_changes():
+    text = """### 个人信息
+> **姓名**：测试候选人001；年龄：28岁；当前月薪：18,000元/月
+### 工作经历
+> 参加工作时间：2019年3月；近 7 年工作经历：工程师
+> 团队协作：参与跨团队交付
+> 职业方向：后端平台
+### 项目经历
+> 项目背景：支付服务改造
+> 主要职责：开发 API
+"""
+    row = parse_markdown(text, 1, "简历_001.md", "abc", "P")
+    assert row["candidate_name"] == "测试候选人001"
+    assert row["age_raw"] == "28岁" and row["age_years"] == 28.0
+    assert row["current_monthly_salary_raw"] == "18,000元/月"
+    assert row["employment_start_raw"] == "2019年3月"
+    assert row["work_years"] == 7.0
+    assert row["work_years_raw"] == "近 7 年工作经历：工程师"
+    assert row["teamwork_summary"] == "参与跨团队交付"
+    assert row["career_direction"] == "后端平台"
+    assert row["project_background"] == "支付服务改造"
 
 
 def test_unparseable_acm_and_zip_slip_are_reported(tmp_path):

@@ -64,12 +64,21 @@ def test_complete_pipeline_publishes_verified_separate_outputs(tmp_path):
     predictions = pd.read_csv(artifact_root / "outputs/p_predictions.csv")
     stability = pd.read_csv(artifact_root / "outputs/stability_analysis.csv")
     rounds = pd.read_csv(artifact_root / "outputs/stability_perturbation_scores.csv")
+    b_csv = pd.read_csv(artifact_root / "data/processed/b_train.csv")
+    p_csv = pd.read_csv(artifact_root / "data/processed/p_predict.csv")
+    extended_fields = ["candidate_name", "age_raw", "age_years", "current_monthly_salary_raw", "employment_start_raw", "work_years_raw", "teamwork_summary", "career_direction", "project_background"]
+    assert set(extended_fields) <= set(b_csv.columns) and set(extended_fields) <= set(p_csv.columns)
+    assert "label_grade" in b_csv and "label_binary" in b_csv
+    assert "label_grade" not in p_csv and "label_binary" not in p_csv
     assert len(predictions) == len(stability) == 260
     assert predictions.id.nunique() == stability.id.nunique() == 260
     assert len(rounds) == 5200 and rounds.held_out_training_id.nunique() == 20
     assert (predictions.predicted_label == (predictions.model_score >= 0.5).astype(int)).all()
     assert "model_score" not in stability and "score_std" in stability
     assert set(predictions.id) == set(stability.id)
+    tree_structure = pd.read_csv(artifact_root / "outputs/gbdt_tree_structure.csv")
+    assert set(tree_structure.tree_number) == set(range(1, 41))
+    assert len(list((artifact_root / "outputs/figures").glob("gbdt_trees_page_*.svg"))) == 5
     assert raw_hashes == {path.name: hashlib.sha256(path.read_bytes()).hexdigest() for path in raw_files}
 
 

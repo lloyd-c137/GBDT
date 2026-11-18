@@ -18,7 +18,11 @@ jobs:
           sparse-checkout: |
             .github
             src
+            scripts
             tests
+            outputs
+            data/schema.json
+            data/processed/data_quality.json
             run_pipeline.py
             requirements.txt
             pytest.ini
@@ -32,6 +36,8 @@ jobs:
         env:
           GBDT_SKIP_REAL_DATA: "1"
         run: python -m pytest -q
+      - name: Verify README against committed official results
+        run: python -m scripts.update_readme --check
       - name: Create synthetic CI inputs
         run: python -m tests.create_ci_fixtures --raw-root "$RUNNER_TEMP/gbdt-ci/raw"
       - name: Run isolated end-to-end pipeline
@@ -52,8 +58,12 @@ jobs:
           assert json.loads((root / "current_success.json").read_text())["run_id"]
           pred = pd.read_csv(root / "outputs/p_predictions.csv")
           stable = pd.read_csv(root / "outputs/stability_analysis.csv")
+          trees = pd.read_csv(root / "outputs/gbdt_tree_structure.csv")
           assert len(pred) == 260 and pred.id.nunique() == 260
           assert len(stable) == 260 and stable.id.nunique() == 260
           assert (pred.predicted_label == (pred.model_score >= 0.5).astype(int)).all()
+          assert set(trees.tree_number) == set(range(1, 41))
+          figures = root / "outputs/figures"
+          assert len(list(figures.glob("gbdt_trees_page_*.svg"))) == 5
           print("CI pipeline outputs verified")
           PY

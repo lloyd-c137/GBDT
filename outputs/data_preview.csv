@@ -1,0 +1,5 @@
+dataset,id,work_years,acm_status,acm_award,target_role,skills_raw,source_file
+B,1,7.0,silver,1,前端开发工程师,Java、Spring Boot、MySQL,b企业/简历_001.md
+B,2,1.0,participated_no_award,0,测试开发工程师,Python、PyTorch、机器学习,b企业/简历_002.md
+P,1,2.0,not_participated,0,测试开发工程师,TypeScript、React、前端工程化,p市场/简历_001.md
+P,2,6.0,bronze,1,运维开发工程师,Python、PyTorch、机器学习,p市场/简历_002.md

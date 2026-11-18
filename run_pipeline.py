@@ -30,6 +30,7 @@ from src.report import write_report
 from src.schema import FEATURES
 from src.stability import analyze
 from src.train import PARAMS
+from src.visualize import generate_tree_artifacts
 
 ROOT = Path(__file__).resolve().parent
 MODEL_VERSION = "b-company-gbdt-v4.1"
@@ -127,7 +128,12 @@ def _validate_data(b: pd.DataFrame, p: pd.DataFrame, errors: list[dict]) -> None
         raise ValueError("B binary labels do not match the preserved A/B/C grades")
     if "label_grade" in p or "label_binary" in p:
         raise ValueError("P must not contain enterprise labels")
-    required = ["acm_status", "acm_award", "target_role", "skills_raw", "work_summary", "project_duties", "github_url", "school_name", "source_file", "source_sha256"]
+    required = [
+        "candidate_name", "age_raw", "age_years", "employment_start_raw", "work_years", "work_years_raw",
+        "acm_status", "acm_award", "target_role", "skills_raw", "work_summary",
+        "project_duties", "teamwork_summary", "career_direction", "project_background",
+        "github_url", "school_name", "source_file", "source_sha256",
+    ]
     for dataset, frame in (("B", b), ("P", p)):
         missing = {column: int(frame[column].isna().sum()) for column in required if frame[column].isna().any()}
         if missing:
@@ -166,6 +172,15 @@ def _to_markdown(frame: pd.DataFrame) -> str:
     )
 
 
+def _write_data_preview(b: pd.DataFrame, p: pd.DataFrame, out: Path) -> None:
+    fields = ["id", "work_years", "acm_status", "acm_award", "target_role", "skills_raw", "source_file"]
+    preview = pd.concat(
+        [b.head(2).assign(dataset="B"), p.head(2).assign(dataset="P")],
+        ignore_index=True,
+    )[["dataset", *fields]]
+    preview.to_csv(out, index=False)
+
+
 def _validate_outputs(artifact_dir: Path, b: pd.DataFrame, p: pd.DataFrame, run_id: str) -> None:
     proc, outputs, models = artifact_dir / "data/processed", artifact_dir / "outputs", artifact_dir / "models"
     required_files = [
@@ -173,7 +188,12 @@ def _validate_outputs(artifact_dir: Path, b: pd.DataFrame, p: pd.DataFrame, run_
         outputs / "model_comparison.csv", outputs / "loocv_predictions.csv", outputs / "confusion_matrix.png",
         outputs / "stability_analysis.csv", outputs / "stability_perturbation_scores.csv",
         outputs / "p_predictions.csv", outputs / "p_positive_candidates.csv", outputs / "feature_analysis.md",
-        outputs / "experiment_manifest.json", outputs / "final_report.md",
+        outputs / "experiment_manifest.json", outputs / "final_report.md", outputs / "gbdt_tree_structure.csv",
+        outputs / "data_preview.csv",
+        outputs / "figures/gbdt_ensemble_overview.svg", outputs / "figures/gbdt_ensemble_overview.png",
+        *[outputs / f"figures/gbdt_tree_{number:03d}.svg" for number in (1, 22, 40)],
+        *[outputs / f"figures/gbdt_tree_{number:03d}.png" for number in (1, 22, 40)],
+        *[outputs / f"figures/gbdt_trees_page_{page:02d}.svg" for page in range(1, 6)],
     ]
     missing_files = [str(path.relative_to(artifact_dir)) for path in required_files if not path.is_file()]
     if missing_files:
@@ -191,6 +211,11 @@ def _validate_outputs(artifact_dir: Path, b: pd.DataFrame, p: pd.DataFrame, run_
         raise RuntimeError("stability rows do not align one-to-one with P IDs")
     if positive.id.tolist() != pred.loc[pred.predicted_label == 1, "id"].tolist():
         raise RuntimeError("positive-candidate file disagrees with full P predictions")
+    preview = pd.read_csv(outputs / "data_preview.csv")
+    if len(preview) != 4 or preview.dataset.value_counts().to_dict() != {"B": 2, "P": 2}:
+        raise RuntimeError("sanitized dataset preview must contain two real rows from each source")
+    if set(preview.columns) & {"candidate_name", "age_raw", "age_years", "current_monthly_salary_raw"}:
+        raise RuntimeError("sanitized preview must not expose personal data columns")
     if not pred.model_score.between(0, 1).all() or not (pred.predicted_label == (pred.model_score >= THRESHOLD).astype(int)).all():
         raise RuntimeError("P scores or labels violate the fixed 0.5 threshold")
     if set(cv.experiment) != set(EXPERIMENTS) or not (cv.groupby("experiment").size() == 20).all():
@@ -214,6 +239,7 @@ def _validate_outputs(artifact_dir: Path, b: pd.DataFrame, p: pd.DataFrame, run_
     if not set(b.id).issubset(set(cv.id)) or set(pred.id) != set(p.id):
         raise RuntimeError("source IDs do not match prediction outputs")
     model = joblib.load(models / "gbdt.joblib")
+    model_sha = sha(models / "gbdt.joblib")
     reloaded = model.predict_proba(model_matrix(p))[:, list(model.classes_).index(1)]
     if not np.allclose(reloaded, pred.model_score.to_numpy(dtype=float), rtol=0, atol=1e-15):
         raise RuntimeError("saved model predictions do not reproduce p_predictions.csv")
@@ -225,6 +251,14 @@ def _validate_outputs(artifact_dir: Path, b: pd.DataFrame, p: pd.DataFrame, run_
     manifest = json.loads((outputs / "experiment_manifest.json").read_text(encoding="utf-8"))
     if manifest.get("run_id") != run_id or manifest.get("parameters") != PARAMS:
         raise RuntimeError("experiment manifest Run ID or fixed model parameters do not match")
+    if manifest.get("model_sha256") != model_sha:
+        raise RuntimeError("experiment manifest model hash does not match gbdt.joblib")
+    tree_rows = pd.read_csv(outputs / "gbdt_tree_structure.csv")
+    if set(tree_rows.tree_number) != set(range(1, 41)):
+        raise RuntimeError("tree structure output does not cover all 40 fitted trees")
+    fitted_nodes = sum(tree.tree_.node_count for tree in model.named_steps["model"].estimators_[:, 0])
+    if len(tree_rows) != fitted_nodes or not (tree_rows.model_sha256 == model_sha).all():
+        raise RuntimeError("tree structure nodes or model provenance do not match the fitted model")
 
 
 def _publish_success(artifact_root: Path, run_dir: Path, run_id: str, record: dict) -> None:
@@ -386,6 +420,7 @@ def run_pipeline(input_root: Path = ROOT / "data/raw", artifact_root: Path = ROO
         b.to_csv(processed / "b_train.csv", index=False)
         p.to_csv(processed / "p_predict.csv", index=False)
         (processed / "data_quality.json").write_text(json.dumps(quality, ensure_ascii=False, indent=2, default=str), encoding="utf-8")
+        _write_data_preview(b, p, outputs / "data_preview.csv")
         _validate_data(b, p, errors)
 
         comparison, cv_predictions = loocv(b)
@@ -398,6 +433,7 @@ def run_pipeline(input_root: Path = ROOT / "data/raw", artifact_root: Path = ROO
         stability, perturbations, scores, labels = analyze(b, p)
         final_model = fit_final(b)
         joblib.dump(final_model, models / "gbdt.joblib")
+        model_file_sha = sha(models / "gbdt.joblib")
         predictions = pd.DataFrame(
             {
                 "id": p.id.astype(int),
@@ -427,6 +463,7 @@ def run_pipeline(input_root: Path = ROOT / "data/raw", artifact_root: Path = ROO
             "joblib_version": joblib.__version__,
             "parameters": PARAMS,
             "features": FEATURES,
+            "model_sha256": model_file_sha,
             "threshold": THRESHOLD,
             "random_seed": PARAMS["random_state"],
             "source_sha256": {"b企业.zip": sha(bzip), "p市场.zip": sha(pzip)},
@@ -436,8 +473,24 @@ def run_pipeline(input_root: Path = ROOT / "data/raw", artifact_root: Path = ROO
         }
         (outputs / "experiment_manifest.json").write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
         _build_feature_analysis(final_model, p, predictions, outputs / "feature_analysis.md")
+        generate_tree_artifacts(models / "gbdt.joblib", outputs / "figures", outputs / "experiment_manifest.json")
         write_report(b, p, comparison, cv_predictions, predictions, stability, manifest, quality, outputs)
         _validate_outputs(artifact_dir, b, p, run_id)
+        (outputs / "run_summary.json").write_text(
+            json.dumps(
+                {
+                    "run_id": run_id,
+                    "status": "validated_for_publication",
+                    "rows": {"b": len(b), "p": len(p)},
+                    "input_sha256": manifest["source_sha256"],
+                    "model_sha256": manifest["model_sha256"],
+                    "model_version": MODEL_VERSION,
+                },
+                ensure_ascii=False,
+                indent=2,
+            ),
+            encoding="utf-8",
+        )
 
         record.update(
             input_sha256=manifest["source_sha256"],

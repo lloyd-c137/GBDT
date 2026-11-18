@@ -1,0 +1,59 @@
+{
+  "schema_version": "1.0.0",
+  "description": "Structured fields extracted from source Markdown. B and P remain separate datasets; personal fields are retained for assignment completeness and are never model inputs.",
+  "publication": {
+    "contains_personal_fields": true,
+    "dataset_kind": "synthetic_resumes_confirmed_by_requester",
+    "authorization_status": "requester_confirmed_public_release",
+    "authorization_note": "Requester confirmed on 2026-11-19 that the records are simulated and have explicit public-release authorization.",
+    "fields_requiring_publication_authorization": [
+      "candidate_name",
+      "age_raw",
+      "age_years",
+      "current_monthly_salary_raw",
+      "employment_start_raw"
+    ],
+    "public_release_requires_authorization": true
+  },
+  "model_input_features": ["acm_award", "work_years"],
+  "datasets": {
+    "B": {
+      "expected_rows": 20,
+      "id_range": [1, 20],
+      "target": "label_binary",
+      "grade_column": "label_grade",
+      "grade_mapping": {"A": 1, "B": 1, "C": 0}
+    },
+    "P": {
+      "expected_rows": 260,
+      "id_range": [1, 260],
+      "target": null,
+      "labels_present": false
+    }
+  },
+  "columns": [
+    {"name": "id", "type": "integer", "nullable": false, "description": "Original resume number, unique only within its dataset."},
+    {"name": "candidate_name", "type": "string", "nullable": false, "sensitive": true, "model_feature": false, "description": "Name as written in the source Markdown."},
+    {"name": "age_raw", "type": "string", "nullable": false, "sensitive": true, "model_feature": false, "description": "Original age field text."},
+    {"name": "age_years", "type": "number", "nullable": false, "sensitive": true, "model_feature": false, "description": "Numeric age parsed from age_raw; retained for the assignment dataset only."},
+    {"name": "current_monthly_salary_raw", "type": "string", "nullable": true, "sensitive": true, "model_feature": false, "description": "Original monthly salary field; null means the source has no value."},
+    {"name": "employment_start_raw", "type": "string", "nullable": false, "sensitive": true, "model_feature": false, "description": "Original work-start-date field text."},
+    {"name": "work_years_raw", "type": "string", "nullable": false, "model_feature": false, "description": "Original experience-duration clause used to derive work_years."},
+    {"name": "work_years", "type": "number", "nullable": false, "model_feature": true, "description": "Parsed work experience in years."},
+    {"name": "acm_status", "type": "string", "nullable": false, "model_feature": false, "description": "Normalized ACM state preserving award, participation, and missing-record distinctions."},
+    {"name": "acm_award", "type": "integer", "nullable": false, "model_feature": true, "description": "Whether an explicit award record exists."},
+    {"name": "target_role", "type": "string", "nullable": false, "model_feature": false, "description": "Target role as described in the resume."},
+    {"name": "skills_raw", "type": "string", "nullable": false, "model_feature": false, "description": "Original skills description with Markdown wrappers normalized."},
+    {"name": "work_summary", "type": "string", "nullable": false, "model_feature": false, "description": "Work content and continuation lines."},
+    {"name": "project_duties", "type": "string", "nullable": false, "model_feature": false, "description": "Project responsibilities and continuation lines."},
+    {"name": "teamwork_summary", "type": "string", "nullable": false, "model_feature": false, "description": "Teamwork field text."},
+    {"name": "career_direction", "type": "string", "nullable": false, "model_feature": false, "description": "Career direction field text."},
+    {"name": "project_background", "type": "string", "nullable": false, "model_feature": false, "description": "Project background field text."},
+    {"name": "github_url", "type": "string", "nullable": false, "model_feature": false, "description": "Original GitHub field; missing values are represented as source text when present."},
+    {"name": "school_name", "type": "string", "nullable": false, "model_feature": false, "description": "School and education description extracted from the education field."},
+    {"name": "source_file", "type": "string", "nullable": false, "model_feature": false, "description": "Path of the source Markdown file within its ZIP."},
+    {"name": "source_sha256", "type": "string", "nullable": false, "model_feature": false, "description": "SHA-256 of the original Markdown bytes."},
+    {"name": "label_grade", "type": "string", "nullable": false, "dataset": "B", "model_feature": false, "description": "Original B-enterprise A/B/C grade."},
+    {"name": "label_binary", "type": "integer", "nullable": false, "dataset": "B", "model_target": true, "description": "A/B=1, C=0. Not present in P."}
+  ]
+}

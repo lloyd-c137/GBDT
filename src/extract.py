@@ -31,12 +31,19 @@ def _clean(s: str) -> str:
 def _fields(text: str) -> dict[str, str]:
     out: dict[str, str] = {}
     aliases = {
-        "work_years": r"工作年限|工作经历|工作经验|工作时间",
+        "candidate_name": r"姓名|候选人姓名",
+        "age_raw": r"年龄",
+        "current_monthly_salary_raw": r"当前月薪",
+        "employment_start_raw": r"参加工作时间",
+        "work_years_raw": r"(?:近\s*)?\d+(?:\.\d+)?\s*年\s*(?:工作经历|工作经验|工作年限)",
+        "work_years": r"工作年限|工作经验|(?<!参加)工作时间",
         "target_role": r"应聘方向|目标岗位|求职意向|应聘岗位|岗位方向",
         "skills_raw": r"技能|技术栈|专业技能",
         "work_summary": r"工作内容|工作职责",
         "project_duties": r"主要职责|项目职责|负责内容",
-        "_field_boundary": r"团队协作|职业方向|项目背景",
+        "teamwork_summary": r"团队协作",
+        "career_direction": r"职业方向",
+        "project_background": r"项目背景",
         "github_url": r"GitHub|Github|github",
         "school_name": r"本科|学校|毕业院校|教育背景",
         "acm": r"ACM",
@@ -116,11 +123,21 @@ def _fields(text: str) -> dict[str, str]:
         val = _clean(stream[end:stop])
         if val and not key.startswith("_") and key not in out: out[key] = val
     # Work-years commonly appear as a clause: “近 7 年工作经历”.
-    m = re.search(r"(?:近\s*)?(\d+(?:\.\d+)?)\s*年\s*(?:工作经历|工作经验|工作年限)", text)
-    if m: out["work_years"] = m.group(1)
+    m = re.search(
+        r"((?:近\s*)?(\d+(?:\.\d+)?)\s*年\s*(?:工作经历|工作经验|工作年限)(?:\s*[:：]\s*[^；;\r\n]*)?)",
+        text,
+    )
+    if m:
+        out["work_years"] = m.group(2)
+        out["work_years_raw"] = _clean(m.group(1))
     else:
-        m = re.search(r"工作年限\s*[:：]\s*(\d+(?:\.\d+)?)\s*年?", stream)
-        if m: out["work_years"] = m.group(1)
+        m = re.search(r"((?:工作年限|工作经历|工作经验)\s*[:：]\s*(\d+(?:\.\d+)?)\s*年?)", stream)
+        if m:
+            out["work_years"] = m.group(2)
+            out["work_years_raw"] = _clean(m.group(1))
+    if out.get("age_raw"):
+        age = re.search(r"\d+(?:\.\d+)?", out["age_raw"])
+        if age: out["age_years"] = age.group(0)
     return out
 
 
@@ -147,9 +164,19 @@ def parse_markdown(text: str, resume_id: int, source_file: str, sha256: str, bus
     years = f.get("work_years")
     try: years_value = float(years) if years is not None else None
     except ValueError: years_value = None
-    row = {"id": int(resume_id), "work_years": years_value, "acm_status": status, "acm_award": award,
+    age_value = f.get("age_years")
+    try: age_years = float(age_value) if age_value is not None else None
+    except ValueError: age_years = None
+    row = {"id": int(resume_id), "candidate_name": f.get("candidate_name"),
+           "age_raw": f.get("age_raw"), "age_years": age_years,
+           "current_monthly_salary_raw": f.get("current_monthly_salary_raw"),
+           "employment_start_raw": f.get("employment_start_raw"),
+           "work_years_raw": f.get("work_years_raw"),
+           "work_years": years_value, "acm_status": status, "acm_award": award,
            "target_role": f.get("target_role"), "skills_raw": f.get("skills_raw"),
            "work_summary": f.get("work_summary"), "project_duties": f.get("project_duties"),
+           "teamwork_summary": f.get("teamwork_summary"), "career_direction": f.get("career_direction"),
+           "project_background": f.get("project_background"),
            "github_url": f.get("github_url"), "school_name": f.get("school_name"),
            "source_file": source_file, "source_sha256": sha256}
     if business == "B":

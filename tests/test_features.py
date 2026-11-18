@@ -22,6 +22,12 @@ def test_feature_order_experiments_and_forbidden_fields():
         model_matrix(df, ["id"])
     with pytest.raises(ValueError):
         model_matrix(df, ["acm_award", "label_grade"])
+    for personal_or_context_field in (
+        "candidate_name", "age_raw", "age_years", "current_monthly_salary_raw",
+        "employment_start_raw", "work_years_raw", "teamwork_summary", "career_direction", "project_background",
+    ):
+        with pytest.raises(ValueError):
+            model_matrix(df, [personal_or_context_field])
 
 
 def test_missing_years_add_transformed_indicator_name_without_index_error(tmp_path):

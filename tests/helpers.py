@@ -41,9 +41,12 @@ def _resume(resume_id: int, years: int, acm: str, label: str | None = None) -> s
     text = f"""# Resume {resume_id}
 
 ### Work history
+> 姓名：测试候选人{resume_id:03d}；年龄：{24 + resume_id % 15} 岁；当前月薪：15,000 元/月
 > 参加工作时间：2018 年 1 月；近 {years} 年工作经历：技术工程师
 > 工作内容：负责 API 与 C# 服务
 > 延续说明：第二行工作正文
+> 团队协作：参与跨团队评审
+> 职业方向：持续深耕后端工程
 
 ### Personal information
 > 应聘方向：后端开发工程师
@@ -55,6 +58,7 @@ def _resume(resume_id: int, years: int, acm: str, label: str | None = None) -> s
 > 本科：示例大学，计算机相关专业
 
 ## 项目经历
+- 项目背景：测试用例项目
 - 主要职责：持续维护项目
   支持第二行项目职责。
 """
