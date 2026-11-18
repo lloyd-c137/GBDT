@@ -1,0 +1,38 @@
+{
+  "model_version": "b-company-gbdt-v4.0",
+  "built_at_utc": "2026-11-18T13:18:21.801434+00:00",
+  "python_version": "3.11.16",
+  "scikit_learn_version": "1.9.1",
+  "pandas_version": "2.3.3",
+  "numpy_version": "2.4.6",
+  "scipy_version": "1.17.1",
+  "joblib_version": "1.6.0",
+  "parameters": {
+    "loss": "log_loss",
+    "n_estimators": 40,
+    "learning_rate": 0.05,
+    "max_depth": 1,
+    "min_samples_leaf": 2,
+    "subsample": 1.0,
+    "random_state": 42
+  },
+  "features": [
+    "acm_award",
+    "work_years"
+  ],
+  "threshold": 0.5,
+  "random_seed": 42,
+  "source_sha256": {
+    "b企业.zip": "1bae25cd807306404887dade4bf8652abcdce1d84814119707d67146b6dee27b",
+    "p市场.zip": "4a2c805de16bd22c7b717f5c36b204fbf428211eb93ed96ff3add3291cbe2410"
+  },
+  "rows": {
+    "b": 20,
+    "p": 260
+  },
+  "label_distribution": {
+    "C": 8,
+    "B": 8,
+    "A": 4
+  }
+}

@@ -1,0 +1,136 @@
+{
+  "input_files": {
+    "b": {
+      "sha256": "1bae25cd807306404887dade4bf8652abcdce1d84814119707d67146b6dee27b",
+      "rows": 20
+    },
+    "p": {
+      "sha256": "4a2c805de16bd22c7b717f5c36b204fbf428211eb93ed96ff3add3291cbe2410",
+      "rows": 260
+    }
+  },
+  "file_counts": {
+    "b": {
+      "archive_entries": 42,
+      "markdown_resumes": 20,
+      "macos_metadata": 21
+    },
+    "p": {
+      "archive_entries": 522,
+      "markdown_resumes": 260,
+      "macos_metadata": 261
+    }
+  },
+  "parse_errors": [],
+  "b_missing_ids": [],
+  "b_extra_ids": [],
+  "p_missing_ids": [],
+  "p_extra_ids": [],
+  "b_label_distribution": {
+    "C": 8,
+    "B": 8,
+    "A": 4
+  },
+  "b_acm_distribution": {
+    "honorable_mention": 4,
+    "bronze": 4,
+    "not_participated": 4,
+    "participated_no_award": 3,
+    "no_award_record": 3,
+    "silver": 2
+  },
+  "p_acm_distribution": {
+    "silver": 49,
+    "honorable_mention": 46,
+    "bronze": 44,
+    "not_participated": 42,
+    "participated_no_award": 40,
+    "no_award_record": 39
+  },
+  "missing_fields": {
+    "b": {
+      "id": 0,
+      "work_years": 0,
+      "acm_status": 0,
+      "acm_award": 0,
+      "target_role": 0,
+      "skills_raw": 0,
+      "work_summary": 0,
+      "project_duties": 0,
+      "github_url": 0,
+      "school_name": 0,
+      "source_file": 0,
+      "source_sha256": 0,
+      "label_grade": 0,
+      "label_binary": 0
+    },
+    "p": {
+      "id": 0,
+      "work_years": 0,
+      "acm_status": 0,
+      "acm_award": 0,
+      "target_role": 0,
+      "skills_raw": 0,
+      "work_summary": 0,
+      "project_duties": 0,
+      "github_url": 0,
+      "school_name": 0,
+      "source_file": 0,
+      "source_sha256": 0
+    }
+  },
+  "data_types": {
+    "b": {
+      "id": "int64",
+      "work_years": "float64",
+      "acm_status": "object",
+      "acm_award": "int64",
+      "target_role": "object",
+      "skills_raw": "object",
+      "work_summary": "object",
+      "project_duties": "object",
+      "github_url": "object",
+      "school_name": "object",
+      "source_file": "object",
+      "source_sha256": "object",
+      "label_grade": "object",
+      "label_binary": "int64"
+    },
+    "p": {
+      "id": "int64",
+      "work_years": "float64",
+      "acm_status": "object",
+      "acm_award": "int64",
+      "target_role": "object",
+      "skills_raw": "object",
+      "work_summary": "object",
+      "project_duties": "object",
+      "github_url": "object",
+      "school_name": "object",
+      "source_file": "object",
+      "source_sha256": "object"
+    }
+  },
+  "type_anomalies": {
+    "b_invalid_work_years": 0,
+    "p_invalid_work_years": 0
+  },
+  "work_years_range": {
+    "b": [
+      1.0,
+      19.0
+    ],
+    "p": [
+      1.0,
+      23.0
+    ]
+  },
+  "duplicate_hashes": {
+    "b": 0,
+    "p": 0
+  },
+  "duplicate_text_rate": {
+    "b": 0.05,
+    "p": 0.31153846153846154
+  }
+}
