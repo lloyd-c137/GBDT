@@ -3,7 +3,7 @@ import pandas as pd
 from sklearn.model_selection import LeaveOneOut
 from sklearn.metrics import accuracy_score, balanced_accuracy_score, precision_score, recall_score, f1_score, confusion_matrix
 from .features import model_matrix
-from .train import build_model
+from .train import build_model, validate_training_matrix
 
 
 def loocv(df: pd.DataFrame, experiments=("E0", "E1", "E2", "E3")) -> tuple[pd.DataFrame, pd.DataFrame]:
@@ -11,8 +11,10 @@ def loocv(df: pd.DataFrame, experiments=("E0", "E1", "E2", "E3")) -> tuple[pd.Da
     for exp in experiments:
         features, _ = build_model(exp)
         X = pd.DataFrame({"_constant_baseline":np.zeros(len(df))}) if exp=="E0" else model_matrix(df, features)
+        if exp != "E0": validate_training_matrix(X)
         preds=[]; scores=[]
         for tr, te in LeaveOneOut().split(X):
+            if exp != "E0": validate_training_matrix(X.iloc[tr])
             _, model = build_model(exp); model.fit(X.iloc[tr], y[tr]); p=int(model.predict(X.iloc[te])[0])
             score=float(model.predict_proba(X.iloc[te])[0, list(model.classes_).index(1)]) if 1 in model.classes_ else 0.0
             preds.append(p); scores.append(score)

@@ -20,48 +20,124 @@ def _safe_member(name: str) -> bool:
 
 
 def _clean(s: str) -> str:
-    return re.sub(r"\s+", " ", re.sub(r"[*`>#]", "", s)).strip(" ：:|；;\t")
+    """Normalize markdown wrappers while preserving literal technical symbols."""
+    s = re.sub(r"`([^`]+)`", r"\1", s)
+    s = re.sub(r"\*\*(.*?)\*\*|__(.*?)__", lambda m: m.group(1) or m.group(2), s)
+    s = re.sub(r"(?<!\*)\*([^*]+)\*(?!\*)", r"\1", s)
+    s = re.sub(r"\[([^\]]+)\]\(([^)]+)\)", r"\1 (\2)", s)
+    return re.sub(r"\s+", " ", s).strip(" ：:|；;\t")
 
 
 def _fields(text: str) -> dict[str, str]:
     out: dict[str, str] = {}
     aliases = {
-        "work_years": r"工作年限|工作经历|工作经验|工作时间",
+        "candidate_name": r"姓名|候选人姓名",
+        "age_raw": r"年龄",
+        "current_monthly_salary_raw": r"当前月薪",
+        "employment_start_raw": r"参加工作时间",
+        "work_years_raw": r"(?:近\s*)?\d+(?:\.\d+)?\s*年\s*(?:工作经历|工作经验|工作年限)",
+        "work_years": r"工作年限|工作经验|(?<!参加)工作时间",
         "target_role": r"应聘方向|目标岗位|求职意向|应聘岗位|岗位方向",
         "skills_raw": r"技能|技术栈|专业技能",
         "work_summary": r"工作内容|工作职责",
         "project_duties": r"主要职责|项目职责|负责内容",
+        "teamwork_summary": r"团队协作",
+        "career_direction": r"职业方向",
+        "project_background": r"项目背景",
         "github_url": r"GitHub|Github|github",
         "school_name": r"本科|学校|毕业院校|教育背景",
         "acm": r"ACM",
     }
-    # Convert markdown table rows and quoted/list lines into one field stream.
+    # Strip only structural markdown prefixes. Keep value characters such as #, +, and _.
+    raw_lines = text.splitlines()
     lines = []
-    for line in text.splitlines():
+    skip_next = False
+    for index, line in enumerate(raw_lines):
+        if skip_next:
+            skip_next = False
+            continue
         line = line.strip()
+        if not line:
+            lines.append("")
+            continue
+        if re.match(r"^#{1,6}\s+", line):
+            lines.append("\x00")
+            continue
+        line = re.sub(r"^(?:>\s*)+", "", line)
+        if re.match(r"^\*\*(?:个人信息|教育背景|工作经历|工作经验|竞赛与技术|竞赛和技术|个人项目经历|项目经历|项目实践|项目与职责|项目经验补充|近期项目补充)\*\*\s*[:：]", line):
+            lines.append("\x00")
+        next_line = raw_lines[index + 1].strip() if index + 1 < len(raw_lines) else ""
+        if re.fullmatch(r"={3,}|-{3,}", next_line):
+            lines.append("\x00")
+            skip_next = True
+            continue
+        if re.match(r"^#{1,6}\s+", line):
+            lines.append("\x00")
+            continue
+        if (
+            re.fullmatch(r"\d+[.)]\s+\*\*[^*]+\*\*", line)
+            or re.fullmatch(r"\*\*[^*]+\*\*", line)
+            or re.fullmatch(r"(?:\*{3,}|_{3,}|={3,}|-{3,})", line)
+        ):
+            lines.append("\x00")
+            continue
+        if re.match(r"^```", line):
+            continue
+        if re.match(r"^\[[^\]]+\]\(#[^)]+\)$", line):
+            continue
         if line.startswith("|"):
-            line = line.strip("|").replace("|", "；")
-        line = re.sub(r"^\s*(?:>+\s*|[-*+]\s+|\d+[.)]\s+)", "", line)
-        if line and not line.startswith("#"): lines.append(line)
+            cells = [cell.strip() for cell in line.strip("|").split("|")]
+            if cells and all(re.fullmatch(r":?-{2,}:?", cell) for cell in cells):
+                continue
+            if cells:
+                first = _clean(cells[0])
+                pair_keys = [
+                    _clean(cells[index])
+                    for index in range(0, len(cells) - 1, 2)
+                    if any(re.fullmatch(pattern, _clean(cells[index]), re.I) for pattern in aliases.values())
+                ]
+                if len(cells) > 2 and len(cells) % 2 == 0 and len(pair_keys) == len(cells) // 2:
+                    line = "；".join(f"{_clean(cells[index])}：{cells[index + 1]}" for index in range(0, len(cells), 2))
+                elif any(re.fullmatch(pattern, first, re.I) for pattern in aliases.values()):
+                    line = f"{first}：" + "；".join(cells[1:])
+                else:
+                    line = "；".join(cells)
+        line = re.sub(r"^(?:[-*+]\s+|\d+[.)]\s+)", "", line)
+        normalized = _clean(line)
+        if re.fullmatch(r"个人信息|教育背景|工作经历|工作经验|竞赛与技术|竞赛和技术|个人项目经历|项目经历|项目实践|项目与职责|项目经验补充|近期项目补充", normalized):
+            lines.append("\x00")
+        else:
+            lines.append(normalized)
     stream = "\n".join(lines)
-    # Split same-line Chinese semicolon attributes as well as separate lines.
-    keys = [(key, re.compile(rf"(?P<k>{pat})\s*[:：]\s*", re.I)) for key, pat in aliases.items()]
+    # A field extends to the next recognized field or section boundary, including
+    # continuation lines. Same-line Chinese-semicolon fields are split by the keys.
+    keys = [(key, re.compile(rf"(?:{pat})\s*[:：]\s*", re.I)) for key, pat in aliases.items()]
     found = []
     for key, pat in keys:
         for m in pat.finditer(stream): found.append((m.start(), m.end(), key))
     found.sort()
     for i, (start, end, key) in enumerate(found):
         stop = found[i+1][0] if i+1 < len(found) else len(stream)
-        line_end = stream.find("\n", end)
-        if line_end >= 0: stop = min(stop, line_end)
+        section_end = stream.find("\x00", end)
+        if section_end >= 0: stop = min(stop, section_end)
         val = _clean(stream[end:stop])
-        if val and key not in out: out[key] = val
+        if val and not key.startswith("_") and key not in out: out[key] = val
     # Work-years commonly appear as a clause: “近 7 年工作经历”.
-    m = re.search(r"(?:近\s*)?(\d+(?:\.\d+)?)\s*年\s*(?:工作经历|工作经验|工作年限)", text)
-    if m: out["work_years"] = m.group(1)
+    m = re.search(
+        r"((?:近\s*)?(\d+(?:\.\d+)?)\s*年\s*(?:工作经历|工作经验|工作年限)(?:\s*[:：]\s*[^；;\r\n]*)?)",
+        text,
+    )
+    if m:
+        out["work_years"] = m.group(2)
+        out["work_years_raw"] = _clean(m.group(1))
     else:
-        m = re.search(r"工作年限\s*[:：]\s*(\d+(?:\.\d+)?)\s*年?", stream)
-        if m: out["work_years"] = m.group(1)
+        m = re.search(r"((?:工作年限|工作经历|工作经验)\s*[:：]\s*(\d+(?:\.\d+)?)\s*年?)", stream)
+        if m:
+            out["work_years"] = m.group(2)
+            out["work_years_raw"] = _clean(m.group(1))
+    if out.get("age_raw"):
+        age = re.search(r"\d+(?:\.\d+)?", out["age_raw"])
+        if age: out["age_years"] = age.group(0)
     return out
 
 
@@ -88,9 +164,19 @@ def parse_markdown(text: str, resume_id: int, source_file: str, sha256: str, bus
     years = f.get("work_years")
     try: years_value = float(years) if years is not None else None
     except ValueError: years_value = None
-    row = {"id": int(resume_id), "work_years": years_value, "acm_status": status, "acm_award": award,
+    age_value = f.get("age_years")
+    try: age_years = float(age_value) if age_value is not None else None
+    except ValueError: age_years = None
+    row = {"id": int(resume_id), "candidate_name": f.get("candidate_name"),
+           "age_raw": f.get("age_raw"), "age_years": age_years,
+           "current_monthly_salary_raw": f.get("current_monthly_salary_raw"),
+           "employment_start_raw": f.get("employment_start_raw"),
+           "work_years_raw": f.get("work_years_raw"),
+           "work_years": years_value, "acm_status": status, "acm_award": award,
            "target_role": f.get("target_role"), "skills_raw": f.get("skills_raw"),
            "work_summary": f.get("work_summary"), "project_duties": f.get("project_duties"),
+           "teamwork_summary": f.get("teamwork_summary"), "career_direction": f.get("career_direction"),
+           "project_background": f.get("project_background"),
            "github_url": f.get("github_url"), "school_name": f.get("school_name"),
            "source_file": source_file, "source_sha256": sha256}
     if business == "B":
@@ -121,4 +207,7 @@ def extract_zip(path: Path, business: str) -> tuple[pd.DataFrame, list[dict]]:
             row = parse_markdown(text, int(m.group(1)), name, digest, business)
             rows.append(row)
             if row["acm_status"] == "unknown": errors.append({"source_file": name, "reason": "ACM status could not be parsed"})
+            raw_years = _fields(text).get("work_years")
+            if raw_years and row["work_years"] is None:
+                errors.append({"source_file": name, "reason": "work_years field is not numeric"})
     return pd.DataFrame(rows).sort_values("id").reset_index(drop=True), errors
