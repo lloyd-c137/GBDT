@@ -1,4 +1,5 @@
 {
+  "run_id": "20261118T153026-c218a072",
   "input_files": {
     "b": {
       "sha256": "1bae25cd807306404887dade4bf8652abcdce1d84814119707d67146b6dee27b",
@@ -110,10 +111,6 @@
       "source_file": "object",
       "source_sha256": "object"
     }
-  },
-  "type_anomalies": {
-    "b_invalid_work_years": 0,
-    "p_invalid_work_years": 0
   },
   "work_years_range": {
     "b": [

@@ -2,3 +2,7 @@
 .pytest_cache/
 __pycache__/
 *.py[cod]
+runs/
+current_success.json
+.pipeline.lock
+.publish_transaction.json

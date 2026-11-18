@@ -1,32 +1,49 @@
-# B 企业简历模式学习实验 V4.0
+# B Company Resume Matching · GBDT V4.1
 
-离线、可追溯的 B 企业历史评级模式实验。项目只从 `data/raw/b企业.zip` 与 `data/raw/p市场.zip` 读取原始 Markdown；不读取或搜索 G 企业数据。原始 ZIP 保持不变。
+Offline experiment of historical B enterprise rating patterns. The pipeline reads only `data/raw/b企业.zip` and `data/raw/p市场.zip`; it does not read G enterprise data. Source ZIP files are never modified.
 
-## 运行
+## Run
 
-要求 Python 3.11+。在项目目录执行：
+Requires Python 3.11. From the project directory:
 
 ```bash
 python -m venv .venv
 . .venv/bin/activate
-pip install -r requirements.txt
+python -m pip install -r requirements.txt
 python run_pipeline.py
-pytest
+python -m pytest -q
 ```
 
-单命令 `python run_pipeline.py` 会解析 ZIP、恢复错误解码的 UTF-8 中文路径、过滤 macOS 元数据并检查编号和标签，再输出 B/P 独立数据集、质量审计、四组 LOOCV 对照、20 轮稳定性分析、固定 E2 最终模型、P 全量预测与报告。输入数据不完整、标签错误、ACM 状态无法识别或核心编号异常会停止训练。
+Each invocation gets a unique Run ID and writes first to `runs/<run_id>/artifacts`. It parses and validates both archives, produces the four LOOCV experiments, 20 perturbation models, the final E2 model, all P predictions, diagnostics, and report. Only a run whose outputs pass consistency checks is published to the standard `data/processed`, `models`, and `outputs` convenience paths. `current_success.json` atomically identifies the authoritative, fully validated run under `runs/<run_id>/artifacts`. Failed runs are recorded as failed and do not publish partial results; interrupted directory promotion is rolled back from its transaction journal on the next invocation.
 
-## 模型
+Use `--input-root` and `--artifact-root` for isolated data and output locations:
 
-目标是 B 标签 A/B=1、C=0。E0 Dummy、E1 深度 1 决策树（ACM）、E2 固定参数 GBDT（ACM 与工作年限）、E3 固定参数 GBDT（仅工作年限）均采用 Leave-One-Out 验证。E2 的缺失值处理器在每个训练折单独拟合。最终阈值固定为 0.5；P 不参与拟合或参数选择。P 的 score 是未校准模型分数，不是录用概率。
+```bash
+python run_pipeline.py --input-root /path/to/raw --artifact-root /tmp/gbdt-run
+```
 
-## 输出
+## Model
 
-- `data/processed/b_train.csv`、`p_predict.csv`：解析后独立数据集，含原始字段与来源哈希。
-- `data/processed/data_quality.json`：行数、缺失、编号、标签、ACM 分布、重复哈希和解析错误。
-- `models/gbdt.joblib`：完整 B 标签训练的正式 E2 Pipeline。
-- `outputs/model_comparison.csv`、`loocv_predictions.csv`、`confusion_matrix.png`。
-- `outputs/stability_analysis.csv`、`p_predictions.csv`、`p_positive_candidates.csv`。
-- `outputs/feature_analysis.md`、`experiment_manifest.json`、`final_report.md`。
+Target is B label A/B=1, C=0. E0 is a featureless `DummyClassifier`; E1 is a depth-1 decision tree on `acm_award`; E2 is the fixed-parameter GBDT on `acm_award` and `work_years`; E3 is the same GBDT on `work_years` only. Imputers are fit inside each training fold. An all-missing training feature fails clearly. The E2 threshold is fixed at 0.5. P is not used for supervised training or parameter selection. Scores are uncalibrated outputs, not hiring probabilities.
 
-LOOCV 是探索性估计，不是独立测试结果。本模型仅学习小样本历史标注关联，不可用于自动招聘决策。
+`work_years_out_of_range` means only that work years fall outside the observed B training minimum and maximum. `unseen_feature_combination` means an exact `(acm_award, work_years)` pair was not observed in B. This is a descriptive coverage count, not an out-of-distribution detector, a model failure, or a hiring criterion. It does not by itself set `review_flag`. Review flags cover missing key features, numeric range overflow, unknown ACM status, or prediction label changes in the stability experiment.
+
+## Outputs
+
+- `data/processed/b_train.csv`, `p_predict.csv`: separate B/P data tables with original source hashes.
+- `data/processed/data_quality.json`: row counts, IDs, missing fields, label and ACM counts, hashes, and parsing errors.
+- `models/gbdt.joblib`: final E2 pipeline fitted on all B labels.
+- `outputs/model_comparison.csv`, `loocv_predictions.csv`: E0–E3 metrics and per-resume validation predictions.
+- `outputs/p_predictions.csv`, `p_positive_candidates.csv`: full P results and the positive subset.
+- `outputs/stability_analysis.csv`: perturbation and coverage diagnostics; join to predictions by `id`.
+- `outputs/stability_perturbation_scores.csv`: scores from each of the 20 held-out-training-sample models.
+- `outputs/confusion_matrix.png`: labeled axes and TN, FP, FN, TP counts.
+- `outputs/feature_analysis.md`, `experiment_manifest.json`, `final_report.md`.
+
+The report contains all P predictions and separates numeric range overflow from exact-combination coverage. Tied model scores remain tied.
+
+LOOCV is exploratory, not independent test performance. This experiment learns associations in a tiny historical sample and must not be used for automated hiring decisions.
+
+## CI and data protection
+
+GitHub Actions runs pytest and the end-to-end pipeline with synthetic resumes in an isolated temporary directory. Sparse checkout omits raw archives and processed resume records. The workflow uploads no artifacts and prints no resume content.

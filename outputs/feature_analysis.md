@@ -1,14 +1,18 @@
-# E2 模型结构分析
+# E2 Model Structure
 
-特征重要性（拟合后分裂贡献）：
+Importances are computed over the fitted transformed feature matrix. They describe this fitted model, not causal effects.
 
-- `acm_award`: 0.934768
-- `work_years`: 0.065232
+## Feature importance
 
-实际分裂节点：
+|feature|importance|
+|---|---|
+|acm_award|0.934768|
+|work_years|0.065232|
 
-|树|特征|阈值|样本数|
-|---:|---|---:|---:|
+## Split nodes
+
+|estimator|feature|threshold|samples|
+|---|---|---|---|
 |1|acm_award|0.5|20|
 |2|acm_award|0.5|20|
 |3|acm_award|0.5|20|
@@ -50,11 +54,11 @@
 |39|work_years|9|20|
 |40|acm_award|0.5|20|
 
-P 市场按 ACM 获奖指示的分数范围与预测：
+## P scores by ACM award indicator
 
-|acm_award|n|score_min|score_max|predicted_positive|
-|---:|---:|---:|---:|---:|
+|acm_award|count|score_min|score_max|predicted_positive|
+|---|---|---|---|---|
 |0|121|0.198877|0.325353|0|
 |1|139|0.872024|0.929761|139|
 
-P 市场出现 4 个不同的原始模型分数档位；同分候选保留并列，未生成排序。
+P produced 4 distinct uncalibrated score tiers; equal scores remain tied.
