@@ -1,10 +1,100 @@
 from __future__ import annotations
 
+from math import isclose
 from pathlib import Path
 
 import matplotlib.pyplot as plt
 import pandas as pd
-from sklearn.metrics import confusion_matrix
+from sklearn.metrics import accuracy_score, balanced_accuracy_score, confusion_matrix
+
+
+def _model_comparison_conclusions(
+    comparison: pd.DataFrame, loocv_predictions: pd.DataFrame
+) -> tuple[str, str]:
+    """Summarize the E1/E2 model contrast and E2/E3 ACM feature ablation."""
+    metrics = comparison.set_index("experiment")
+    predictions = loocv_predictions.set_index(["experiment", "id"])
+
+    def pair(left: str, right: str) -> tuple[pd.DataFrame, pd.DataFrame]:
+        left_rows = predictions.loc[left].sort_index()
+        right_rows = predictions.loc[right].sort_index()
+        if not left_rows.index.equals(right_rows.index) or not left_rows.y_true.equals(right_rows.y_true):
+            raise ValueError(f"{left}/{right} LOOCV rows or true labels do not match")
+        return left_rows, right_rows
+
+    def metric_values(experiment: str, rows: pd.DataFrame) -> tuple[float, float]:
+        values = (
+            float(accuracy_score(rows.y_true, rows.y_pred)),
+            float(balanced_accuracy_score(rows.y_true, rows.y_pred)),
+        )
+        for name, actual in zip(("accuracy", "balanced_accuracy"), values):
+            if not isclose(actual, float(metrics.loc[experiment, name]), abs_tol=1e-12):
+                raise ValueError(f"{experiment} {name} does not match its LOOCV predictions")
+        return values
+
+    def errors(rows: pd.DataFrame) -> set[int]:
+        return set(rows.loc[rows.y_true != rows.y_pred].index.astype(int))
+
+    def metric_text(left_name: str, right_name: str, left: tuple[float, float], right: tuple[float, float]) -> str:
+        return (
+            f"Accuracy {left_name}={left[0]:.4f}, {right_name}={right[0]:.4f} "
+            f"(change {right_name}−{left_name} {right[0] - left[0]:+.4f}); Balanced Accuracy "
+            f"{left_name}={left[1]:.4f}, {right_name}={right[1]:.4f} "
+            f"(change {right_name}−{left_name} {right[1] - left[1]:+.4f})."
+        )
+
+    def metric_direction(deltas: tuple[float, float]) -> str:
+        accuracy_delta, balanced_delta = deltas
+        if accuracy_delta == 0 and balanced_delta == 0:
+            return "Neither metric changed."
+        if accuracy_delta >= 0 and balanced_delta >= 0:
+            return "E2 is no worse on either metric and improves at least one."
+        if accuracy_delta <= 0 and balanced_delta <= 0:
+            return "E2 is no better on either metric and declines on at least one."
+        return "The metrics move in opposite directions; this is a trade-off, not an overall improvement."
+
+    e1, e2 = pair("E1", "E2")
+    e1_metrics, e2_metrics = metric_values("E1", e1), metric_values("E2", e2)
+    deltas = (e2_metrics[0] - e1_metrics[0], e2_metrics[1] - e1_metrics[1])
+    e1_errors, e2_errors = errors(e1), errors(e2)
+    changed_labels = int((e1.y_pred.to_numpy() != e2.y_pred.to_numpy()).sum())
+    if changed_labels == 0:
+        label_result = (
+            "E1 and E2 produced identical LOOCV predictions, so no classification gain was observed "
+            "for the complete E2 configuration on these folds. This does not establish future generalization."
+        )
+    else:
+        label_result = (
+            f"E1 and E2 predictions differed for {changed_labels} of {len(e1)} LOOCV records; "
+            "the difference is exploratory and does not identify which configuration change caused it."
+        )
+    error_result = (
+        f"Their error-ID sets are identical ({sorted(e1_errors)})."
+        if e1_errors == e2_errors
+        else f"Error IDs: E1={sorted(e1_errors)}; E2={sorted(e2_errors)}."
+    )
+    e1_e2 = (
+        "E1 is a DecisionTreeClassifier using acm_award; E2 is a GradientBoostingClassifier using "
+        "acm_award and work_years. "
+        f"{metric_text('E1', 'E2', e1_metrics, e2_metrics)} {metric_direction(deltas)} "
+        f"{label_result} {error_result} Since both the algorithm and feature set change, this comparison "
+        "cannot isolate the incremental effect of work_years."
+    )
+
+    e2, e3 = pair("E2", "E3")
+    e2_metrics, e3_metrics = metric_values("E2", e2), metric_values("E3", e3)
+    e2_errors, e3_errors = errors(e2), errors(e3)
+    e2_e3_changed = int((e2.y_pred.to_numpy() != e3.y_pred.to_numpy()).sum())
+    e2_e3 = (
+        "E2 and E3 use the same GBDT configuration; E2 includes acm_award and work_years, while E3 "
+        "uses work_years only. "
+        f"{metric_text('E2', 'E3', e2_metrics, e3_metrics)} "
+        f"Their LOOCV labels differ for {e2_e3_changed} records; error-ID sets "
+        f"{'are identical' if e2_errors == e3_errors else f'differ (E2={sorted(e2_errors)}; E3={sorted(e3_errors)})'}. "
+        f"This is an exploratory ACM-feature ablation on the current {len(e2)} labeled records; any association is "
+        "not causal and does not establish ACM awards as a hiring criterion."
+    )
+    return e1_e2, e2_e3
 
 
 def write_report(
@@ -24,38 +114,10 @@ def write_report(
     _write_confusion_png(out / "confusion_matrix.png", matrix)
 
     by_experiment = {
-        name: set(
-            group.loc[group.y_true != group.y_pred, "id"].astype(int).tolist()
-        )
+        name: set(group.loc[group.y_true != group.y_pred, "id"].astype(int).tolist())
         for name, group in loocv_predictions.groupby("experiment")
     }
-    e1_errors, e2_errors = by_experiment.get("E1", set()), by_experiment.get("E2", set())
-    error_relation = (
-        "E1 and E2 produced the same LOOCV error-ID set."
-        if e1_errors == e2_errors
-        else "E1 and E2 produced different LOOCV error-ID sets."
-    )
-    comp = comparison.set_index("experiment")
-    e1_pred = loocv_predictions.loc[loocv_predictions.experiment == "E1"].set_index("id").y_pred
-    e2_pred = loocv_predictions.loc[loocv_predictions.experiment == "E2"].set_index("id").y_pred
-    same_predictions = e1_pred.sort_index().equals(e2_pred.sort_index())
-    balanced_delta = float(comp.loc["E2", "balanced_accuracy"] - comp.loc["E1", "balanced_accuracy"])
-    accuracy_delta = float(comp.loc["E2", "accuracy"] - comp.loc["E1", "accuracy"])
-    if same_predictions:
-        gbdt_conclusion = "E2 and E1 produced identical LOOCV labels; the GBDT showed no additional validation value over the shallow tree."
-    elif balanced_delta > 0 and accuracy_delta >= 0:
-        gbdt_conclusion = f"E2 exceeded E1 on balanced accuracy by {balanced_delta:.3f} and changed accuracy by {accuracy_delta:+.3f}."
-    else:
-        gbdt_conclusion = f"E2 did not improve balanced accuracy over E1 (difference {balanced_delta:+.3f}; accuracy difference {accuracy_delta:+.3f})."
-    if same_predictions:
-        years_conclusion = "Adding work_years to E1 did not change any LOOCV predicted labels."
-    else:
-        years_conclusion = (
-            f"Adding work_years changed {int((e1_pred.sort_index() != e2_pred.sort_index()).sum())} "
-            "LOOCV labels; interpret the difference as exploratory."
-        )
-
-    e2_e3_delta = float(comp.loc["E2", "balanced_accuracy"] - comp.loc["E3", "balanced_accuracy"])
+    e1_e2_conclusion, e2_e3_conclusion = _model_comparison_conclusions(comparison, loocv_predictions)
     labels = b.label_grade.value_counts().reindex(["A", "B", "C"], fill_value=0).to_dict()
     acm = _plain_table(pd.crosstab(b.acm_status, b.label_binary).to_string())
     roles = _plain_table(pd.crosstab(b.target_role.fillna("missing"), b.label_grade).to_string())
@@ -111,7 +173,15 @@ Errors are computed from this run's row-level predictions:
 
 {errors_md}
 
-{error_relation} {gbdt_conclusion} {years_conclusion} Removing ACM (E3) changed E2 balanced accuracy by {e2_e3_delta:+.3f}. The E2 confusion matrix is in `confusion_matrix.png`; its counts are TN={int(matrix[0,0])}, FP={int(matrix[0,1])}, FN={int(matrix[1,0])}, TP={int(matrix[1,1])}.
+### E1 and E2: complete model comparison
+
+{e1_e2_conclusion}
+
+### E2 and E3: exploratory ACM feature ablation
+
+{e2_e3_conclusion}
+
+The E2 confusion matrix is in `confusion_matrix.png`; its counts are TN={int(matrix[0,0])}, FP={int(matrix[0,1])}, FN={int(matrix[1,0])}, TP={int(matrix[1,1])}.
 
 ## Observed B-label patterns
 
@@ -150,7 +220,8 @@ Twenty leave-one-training-sample-out E2 models were evaluated on each P record. 
 ## Limits and reproducibility
 
 - The training set has only {len(b)} labeled resumes and no independent test set; LOOCV remains exploratory.
-- ACM carries most observed separation, and E2 did not show an advantage over the simple tree on this run.
+- E1/E2 comparison: {e1_e2_conclusion}
+- E2/E3 comparison: {e2_e3_conclusion}
 - P predictions reflect B historical labels, not job competence or hiring probability. Do not use them to automate screening or rejection.
 - Each run is preserved under `runs/<run_id>/`; `current_success.json` identifies the latest fully validated run. A failed run is recorded as failed and does not publish partial outputs.
 - Run ID: `{manifest.get('run_id', 'unavailable')}`; model version: `{manifest.get('model_version', 'unavailable')}`. B ZIP SHA-256: `{manifest.get('source_sha256', {}).get('b企业.zip', 'unavailable')}`. P ZIP SHA-256: `{manifest.get('source_sha256', {}).get('p市场.zip', 'unavailable')}`. Runtime: Python `{manifest.get('python_version', 'unavailable')}`, scikit-learn `{manifest.get('scikit_learn_version', 'unavailable')}`.

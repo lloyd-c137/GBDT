@@ -1,7 +1,7 @@
 {
-  "run_id": "20261118T153026-c218a072",
+  "run_id": "20261118T160245-14b8e414",
   "model_version": "b-company-gbdt-v4.1",
-  "built_at_utc": "2026-11-18T15:30:27.520564+00:00",
+  "built_at_utc": "2026-11-18T16:02:46.542957+00:00",
   "python_version": "3.11.16",
   "scikit_learn_version": "1.9.1",
   "pandas_version": "2.3.3",

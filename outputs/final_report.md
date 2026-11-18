@@ -24,7 +24,15 @@ Errors are computed from this run's row-level predictions:
 - **E2**: 14, 20
 - **E3**: 9, 10, 16, 20
 
-E1 and E2 produced the same LOOCV error-ID set. E2 and E1 produced identical LOOCV labels; the GBDT showed no additional validation value over the shallow tree. Adding work_years to E1 did not change any LOOCV predicted labels. Removing ACM (E3) changed E2 balanced accuracy by +0.125. The E2 confusion matrix is in `confusion_matrix.png`; its counts are TN=8, FP=0, FN=2, TP=10.
+### E1 and E2: complete model comparison
+
+E1 is a DecisionTreeClassifier using acm_award; E2 is a GradientBoostingClassifier using acm_award and work_years. Accuracy E1=0.9000, E2=0.9000 (change E2−E1 +0.0000); Balanced Accuracy E1=0.9167, E2=0.9167 (change E2−E1 +0.0000). Neither metric changed. E1 and E2 produced identical LOOCV predictions, so no classification gain was observed for the complete E2 configuration on these folds. This does not establish future generalization. Their error-ID sets are identical ([14, 20]). Since both the algorithm and feature set change, this comparison cannot isolate the incremental effect of work_years.
+
+### E2 and E3: exploratory ACM feature ablation
+
+E2 and E3 use the same GBDT configuration; E2 includes acm_award and work_years, while E3 uses work_years only. Accuracy E2=0.9000, E3=0.8000 (change E3−E2 -0.1000); Balanced Accuracy E2=0.9167, E3=0.7917 (change E3−E2 -0.1250). Their LOOCV labels differ for 4 records; error-ID sets differ (E2=[14, 20]; E3=[9, 10, 16, 20]). This is an exploratory ACM-feature ablation on the current 20 labeled records; any association is not causal and does not establish ACM awards as a hiring criterion.
+
+The E2 confusion matrix is in `confusion_matrix.png`; its counts are TN=8, FP=0, FN=2, TP=10.
 
 ## Observed B-label patterns
 
@@ -340,8 +348,9 @@ Twenty leave-one-training-sample-out E2 models were evaluated on each P record. 
 ## Limits and reproducibility
 
 - The training set has only 20 labeled resumes and no independent test set; LOOCV remains exploratory.
-- ACM carries most observed separation, and E2 did not show an advantage over the simple tree on this run.
+- E1/E2 comparison: E1 is a DecisionTreeClassifier using acm_award; E2 is a GradientBoostingClassifier using acm_award and work_years. Accuracy E1=0.9000, E2=0.9000 (change E2−E1 +0.0000); Balanced Accuracy E1=0.9167, E2=0.9167 (change E2−E1 +0.0000). Neither metric changed. E1 and E2 produced identical LOOCV predictions, so no classification gain was observed for the complete E2 configuration on these folds. This does not establish future generalization. Their error-ID sets are identical ([14, 20]). Since both the algorithm and feature set change, this comparison cannot isolate the incremental effect of work_years.
+- E2/E3 comparison: E2 and E3 use the same GBDT configuration; E2 includes acm_award and work_years, while E3 uses work_years only. Accuracy E2=0.9000, E3=0.8000 (change E3−E2 -0.1000); Balanced Accuracy E2=0.9167, E3=0.7917 (change E3−E2 -0.1250). Their LOOCV labels differ for 4 records; error-ID sets differ (E2=[14, 20]; E3=[9, 10, 16, 20]). This is an exploratory ACM-feature ablation on the current 20 labeled records; any association is not causal and does not establish ACM awards as a hiring criterion.
 - P predictions reflect B historical labels, not job competence or hiring probability. Do not use them to automate screening or rejection.
 - Each run is preserved under `runs/<run_id>/`; `current_success.json` identifies the latest fully validated run. A failed run is recorded as failed and does not publish partial outputs.
-- Run ID: `20261118T153026-c218a072`; model version: `b-company-gbdt-v4.1`. B ZIP SHA-256: `1bae25cd807306404887dade4bf8652abcdce1d84814119707d67146b6dee27b`. P ZIP SHA-256: `4a2c805de16bd22c7b717f5c36b204fbf428211eb93ed96ff3add3291cbe2410`. Runtime: Python `3.11.16`, scikit-learn `1.9.1`.
+- Run ID: `20261118T160245-14b8e414`; model version: `b-company-gbdt-v4.1`. B ZIP SHA-256: `1bae25cd807306404887dade4bf8652abcdce1d84814119707d67146b6dee27b`. P ZIP SHA-256: `4a2c805de16bd22c7b717f5c36b204fbf428211eb93ed96ff3add3291cbe2410`. Runtime: Python `3.11.16`, scikit-learn `1.9.1`.
 - Reproduce with `python run_pipeline.py`. The run manifest records dependency versions, fixed model parameters, feature names, and threshold.
